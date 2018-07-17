@@ -132,7 +132,7 @@ typedef enum {
 } DCUserMsgId;
 
 typedef enum {
-    DC_SEARCH_ANY = 1,		/* search type values start at 1 according to the protocol*/
+    DC_SEARCH_ANY,
     DC_SEARCH_AUDIO,
     DC_SEARCH_COMPRESSED,
     DC_SEARCH_DOCUMENTS,
@@ -155,14 +155,6 @@ typedef enum {
     DC_ADCGET_TTH,	/* Upload by file root */
     DC_ADCGET_TTHL	/* Upload tth leaves */
 } DCAdcgetType;
-
-typedef enum {
-    DC_SORT_NAME = 0,
-    DC_SORT_SHARE = 1,
-    DC_SORT_MAX, // DC_SORT_MAX must be less than or equal to DC_SORT_ASC
-    DC_SORT_ASC = ((uint64_t)1<<63),
-    DC_SORT_MASK = (~DC_SORT_ASC)
-} DCUserSortType;
 
 typedef struct _DCUserConn DCUserConn;
 typedef struct _DCUserInfo DCUserInfo;
@@ -287,15 +279,15 @@ struct _DCFileList {
     DCFileType type;
     uint64_t size;	/* total size of all contained files for DC_TYPE_DIR */
     union {
-        struct {
+    	struct {
             char    has_tth;
-            char    tth[39];
+	        char    tth[39];
             time_t  mtime;
-        } reg;
-        struct {
-            char *real_path;
-            HMap *children;
-        } dir;
+	    } reg;
+	    struct {
+	        char *real_path;
+	        HMap *children;
+	    } dir;
     };
 };
 
@@ -371,14 +363,12 @@ extern ByteQ *hub_sendq;
 extern HMap *hub_users;
 extern HMap *user_conns;
 extern struct sockaddr_in local_addr;
-extern struct in_addr force_remote_addr;
 extern struct in_addr force_listen_addr;
 extern int hub_socket;
 extern bool running;
 extern HMap *pending_userinfo;
 extern uint32_t display_flags;
 extern uint32_t log_flags;
-extern DCUserSortType user_sort_order;
 
 extern uint16_t listen_port;
 extern char *my_tag;
@@ -456,7 +446,7 @@ void screen_get_size(int *rows, int *cols);
 void set_screen_prompt(const char *prompt, ...) __attribute__ ((format (printf, 1, 2)));
 bool set_log_file(const char *new_filename, bool verbose);
 void sorted_list_completion_generator(const char *base, PtrV *results,
-                                      void *items, size_t item_count, size_t item_size, size_t key_offset); /* completion */
+    void *items, size_t item_count, size_t item_size, size_t key_offset); /* completion */
 DCCompletionEntry *new_completion_entry(const char *input, const char *display); /* completion */
 DCCompletionEntry *new_completion_entry_full(char *input, char *display, const char *input_fmt, const char *display_fmt, bool finalize, bool quoted);
 void free_completion_entry(DCCompletionEntry *entry); /* completion */
@@ -521,7 +511,7 @@ void remote_wildcard_expand(char *matchpath, bool *quotedptr, const char *basedi
 bool has_leading_slash(const char *str);
 void dir_to_filelist(DCFileList *parent, const char *path);
 bool write_filelist_file(DCFileList* root, const char* prefix);
-
+    
 /* xml_flist.c */
 int write_xml_filelist(int fd, DCFileList* root);
 int write_bzxml_filelist(int fd, DCFileList* root);
@@ -543,7 +533,6 @@ char *catfiles_with_trailing_slash(const char *p1, const char *p2);
 bool fd_set_status_flags(int fd, bool set, int modflags);
 #define fd_set_nonblock_flag(f,s) fd_set_status_flags(f,s,O_NONBLOCK)
 char *getenv_default(const char *name, char *defvalue);
-char *bytes_to_units(uint64_t filesize);
 
 #include "tth_file.h"
 
@@ -557,7 +546,7 @@ bool parse_ip_and_port(char *source, struct sockaddr_in *addr, uint16_t defport)
 char *join_strings(char **strs, int count, char mid);
 PtrV *wordwrap(const char *str, size_t len, size_t first_width, size_t other_width);
 struct dirent *xreaddir(DIR *dh);
-
+    
 #define LONGEST_ELAPSED_TIME 22 /* 123456789012dNNhNNmNNs */
 char *elapsed_time_to_string(time_t elapsed, char *buf);
 
@@ -566,7 +555,6 @@ int parse_search_selection(char *str, DCSearchSelection *data);
 bool perform_inbound_search(DCSearchSelection *data, DCUserInfo *ui, struct sockaddr_in *addr);
 extern PtrV *our_searches;
 bool add_search_request(char *args);
-bool add_search_request_type(char *args, DCSearchDataType datatype);
 void handle_search_result(char *buf, uint32_t len);
 void free_search_request(DCSearchRequest *sr);
 char *search_selection_to_string(DCSearchSelection *sr);

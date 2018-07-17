@@ -10,3 +10,4 @@ rpm/microdc.spec
 slackware/microdc.SlackBuild
 .deps/
 stamp-h1
+.DS_Store
