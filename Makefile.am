@@ -25,9 +25,6 @@ slackware: slackware/@PACKAGE@.SlackBuild
 
 clean-local:
 	-rm -f build-stamp configure-stamp stamp-h1
-	-rm -f debian/compat debian/files debian/@PACKAGE@.substvars
-	-rm -f debian/stamp-*
-	-rm -rf debian/@PACKAGE@
 
 # This macro is useful until gnulib-tool is incorporated into autoreconf.
 # Unfortunately the ./configure script is first run if configure.ac is
