@@ -47,12 +47,12 @@ AH_TEMPLATE([HAVE_LIBXML2], [Define if libxml2 is installed])
 #AH_TEMPLATE([XML_SAVE_FORMAT], [1], [Define if libxml2 has no such option for xmlSave- functions])
 AC_PATH_PROG(XML_CONFIG, xml2-config)
 AC_PATH_PROG(TR, tr)
-if test -n "$XML_CONFIG" && test -n "$TR"; then
-  LIBXML2_VERSION=`$XML_CONFIG --version | $TR -d "."`
-  if test $LIBXML2_VERSION -eq 2616; then
-    AC_DEFINE([XML_SAVE_FORMAT], [1], [The libxml2 version 2.6.16 has no such option defined in the library headers])
-  fi
-  if test $LIBXML2_VERSION -ge 2616; then
+#if test -n "$XML_CONFIG" && test -n "$TR"; then
+#  LIBXML2_VERSION=`$XML_CONFIG --version | $TR -d "."`
+#  if test $LIBXML2_VERSION -eq 2616; then
+#    AC_DEFINE([XML_SAVE_FORMAT], [1], [The libxml2 version 2.6.16 has no such option defined in the library headers])
+#  fi
+#  if test $LIBXML2_VERSION -ge 2616; then
     AC_DEFINE([HAVE_LIBXML2])
     LIBXML2_LIBS="`$XML_CONFIG --libs`"
     LIBXML2_CFLAGS="`$XML_CONFIG --cflags`"
@@ -60,10 +60,10 @@ if test -n "$XML_CONFIG" && test -n "$TR"; then
     AC_SUBST(LIBXML2_CFLAGS)
 #    LIBS="$LIBS $LIBXML2_LIBS"
 #    CFLAGS="$CFLAGS $LIBXML2_CFLAGS"
-  else
-    AC_MSG_WARN([XML libxml2 library version 2.6.16 or later is required to support XML filelists])
-  fi
-fi
+#  else
+#    AC_MSG_WARN([XML libxml2 library version 2.6.16 or later is required to support XML filelists])
+#  fi
+#fi
 
 # Checks for header files
 
