@@ -63,9 +63,7 @@ tthsum_LDADD = \
 
 # $(LIBICONV) - not yet used
 
-man_MANS = \
-  microdc.1 \
-  microdc.pl.1
+man_MANS = microdc2.1
 
 EXTRA_DIST = \
   $(man_MANS)
