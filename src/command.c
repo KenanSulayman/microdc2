@@ -65,6 +65,7 @@ static void cmd_retry(int argc, char **argv);
 static void cmd_help(int argc, char **argv);
 static void cmd_exit(int argc, char **argv);
 static void cmd_say(int argc, char **argv);
+static void cmd_rehash(int argc, char **argv);
 static void cmd_msg(int argc, char **argv);
 static void cmd_raw(int argc, char **argv);
 static void cmd_disconnect(int argc, char **argv);
@@ -268,6 +269,9 @@ command_init(void)
           "\n"
           "Example:\n"
           "  say \"hi everyone!\"\n"));
+    add_builtin_command("rehash", cmd_rehash, NULL,
+        _("rehash"),
+        _("Refresh share.\n"));
     add_builtin_command("search", cmd_search, NULL,
         _("search WORD..."),
         _("Issue a search for the specified search words.\n"));
@@ -871,6 +875,12 @@ cmd_say(int argc, char **argv)
     free(hub_my_nick);
     free(hub_t2);
     free(t2);
+}
+
+static void
+cmd_rehash(int argc, char **argv)
+{
+   local_file_list_update_init(); 
 }
 
 static void
