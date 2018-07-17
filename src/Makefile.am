@@ -8,7 +8,7 @@ AM_CPPFLAGS = \
   -I$(top_builddir)/lib \
   -I$(top_srcdir)/lib
 
-bin_PROGRAMS = microdc2 tthsum
+bin_PROGRAMS = microdc2
 
 microdc2_SOURCES = \
   command.c \
@@ -33,9 +33,6 @@ microdc2_SOURCES = \
   charsets.h \
   microdc.h
 
-tthsum_SOURCES = \
-  tth.c
-
 #microdc_tth_SOURCES = \
 #  tth_file.c \
 #  tth_file.h \
@@ -51,11 +48,6 @@ microdc2_LDADD = \
   $(LIBICONV) \
   $(LIBXML2_LIBS)
 
-
-tthsum_LDADD = \
-  tth/libtth.a \
-  ../lib/libgnu.a \
-  $(LIBINTL)
 
 #microdc_tth_LDADD = \
 #  tth/libtth.a \
