@@ -55,6 +55,15 @@
 #include "common/msgq.h"
 #include "microdc.h"
 
+/* Define the macro below for orphan handle checking (useful for debugging) */
+#define CHECK_ORPHAN_HANDLES
+
+#ifdef CHECK_ORPHAN_HANDLES
+#define IF_ORPHAN_HANDLES(x) x
+#else
+#define IF_ORPHAN_HANDLES(x)
+#endif
+
 enum {
     VERSION_OPT = 256,
     HELP_OPT
@@ -1306,34 +1315,60 @@ main (int argc, char **argv)
 	        break;
 	    }
 
-    	if (running && FD_ISSET(signal_pipe[0], &res_read_fds))
-	        read_signal_input();
-    	if (running && FD_ISSET(STDIN_FILENO, &res_read_fds))
+    	if (running && FD_ISSET(signal_pipe[0], &res_read_fds)) {
+            FD_CLR(signal_pipe[0], &res_read_fds);
+            read_signal_input();
+	    }
+    	if (running && FD_ISSET(STDIN_FILENO, &res_read_fds)) {
+            IF_ORPHAN_HANDLES (FD_CLR(STDIN_FILENO, &res_read_fds));
     	    screen_read_input();
-    	if (running && listen_socket >= 0 && FD_ISSET(listen_socket, &res_read_fds))
+	    }
+    	if (running && listen_socket >= 0 && FD_ISSET(listen_socket, &res_read_fds)) {
+	        IF_ORPHAN_HANDLES (FD_CLR(listen_socket, &res_read_fds));
 	        handle_listen_connection();
-	    if (running && hub_socket >= 0 && FD_ISSET(hub_socket, &res_read_fds))
+	    }
+	    if (running && hub_socket >= 0 && FD_ISSET(hub_socket, &res_read_fds)) {
+	        IF_ORPHAN_HANDLES (FD_CLR(hub_socket, &res_read_fds));
 	        hub_input_available();
-	    if (running && hub_socket >= 0 && FD_ISSET(hub_socket, &res_write_fds))
+	    }
+	    if (running && hub_socket >= 0 && FD_ISSET(hub_socket, &res_write_fds)) {
+	        IF_ORPHAN_HANDLES (FD_CLR(hub_socket, &res_write_fds));
 	        hub_now_writable();
+	    }
         if (running)
             check_hub_activity();
-	    if (running && search_socket >= 0 && FD_ISSET(search_socket, &res_read_fds))
+	    if (running && search_socket >= 0 && FD_ISSET(search_socket, &res_read_fds)) {
+    	    IF_ORPHAN_HANDLES (FD_CLR(search_socket, &res_read_fds));
     	    search_input_available();
-	    if (running && search_socket >= 0 && FD_ISSET(search_socket, &res_write_fds))
+	    }
+	    if (running && search_socket >= 0 && FD_ISSET(search_socket, &res_write_fds)) {
+	        IF_ORPHAN_HANDLES (FD_CLR(search_socket, &res_write_fds));
 	        search_now_writable();
-        if (running && FD_ISSET(lookup_request_mq->fd, &res_write_fds))
+	    }
+        if (running && FD_ISSET(lookup_request_mq->fd, &res_write_fds)) {
+            IF_ORPHAN_HANDLES (FD_CLR(lookup_request_mq->fd, &res_write_fds));
             lookup_request_fd_writable();
-        if (running && FD_ISSET(lookup_result_mq->fd, &res_read_fds))
+	    }
+        if (running && FD_ISSET(lookup_result_mq->fd, &res_read_fds)) {
+            IF_ORPHAN_HANDLES (FD_CLR(lookup_result_mq->fd, &res_read_fds));
             lookup_result_fd_readable();
-        if (running && FD_ISSET(parse_request_mq->fd, &res_write_fds))
+	    }
+        if (running && FD_ISSET(parse_request_mq->fd, &res_write_fds)) {
+            IF_ORPHAN_HANDLES (FD_CLR(parse_request_mq->fd, &res_write_fds));
             parse_request_fd_writable();
-        if (running && FD_ISSET(parse_result_mq->fd, &res_read_fds))
+	    }
+        if (running && FD_ISSET(parse_result_mq->fd, &res_read_fds)) {
+            IF_ORPHAN_HANDLES (FD_CLR(parse_result_mq->fd, &res_read_fds));
             parse_result_fd_readable();
-        if (running && FD_ISSET(update_request_mq->fd, &res_write_fds))
+	    }
+        if (running && FD_ISSET(update_request_mq->fd, &res_write_fds)) {
+            IF_ORPHAN_HANDLES (FD_CLR(update_request_mq->fd, &res_write_fds));
             update_request_fd_writable();
-        if (running && FD_ISSET(update_result_mq->fd, &res_read_fds))
+	    }
+        if (running && FD_ISSET(update_result_mq->fd, &res_read_fds)) {
+            IF_ORPHAN_HANDLES (FD_CLR(update_result_mq->fd, &res_read_fds));
             update_result_fd_readable();
+	    }
 
 	    if (running) {
 	        HMapIterator it;
@@ -1341,13 +1376,36 @@ main (int argc, char **argv)
 	        hmap_iterator(user_conns, &it);
 	        while (running && it.has_next(&it)) {
 	    	    DCUserConn *uc = it.next(&it);
-	    	    if (uc->put_mq != NULL && FD_ISSET(uc->put_mq->fd, &res_write_fds))
+	    	    if (uc->put_mq != NULL && FD_ISSET(uc->put_mq->fd, &res_write_fds)) {
+	    	        IF_ORPHAN_HANDLES (FD_CLR(uc->put_mq->fd, &res_write_fds));
 	    	        user_request_fd_writable(uc);
-                    if (uc->get_mq != NULL && FD_ISSET(uc->get_mq->fd, &res_read_fds))
-                        user_result_fd_readable(uc);
+	            }
+	            if (uc->get_mq != NULL && FD_ISSET(uc->get_mq->fd, &res_read_fds)) {
+	                IF_ORPHAN_HANDLES (FD_CLR(uc->get_mq->fd, &res_read_fds));
+	                user_result_fd_readable(uc);
+	            }
 	        }
 	    }
-    }
+
+#ifdef CHECK_ORPHAN_HANDLES
+        /* Check for orphan file handles */
+        {
+            int i;
+            for (i = 0; i < FD_SETSIZE; i++) {
+                if (FD_ISSET (i, &res_read_fds)) {
+                    warn(_("Orphan READ file handle %d, closing\n"), i);
+                    close (i);
+                    FD_CLR (i, &read_fds);
+                }
+                if (FD_ISSET (i, &res_write_fds)) {
+                    warn(_("Orphan WRITE file handle %d, closing\n"), i);
+                    close (i);
+                    FD_CLR (i, &write_fds);
+                }
+            }
+        }
+#endif
+	}
 
 cleanup:
 
