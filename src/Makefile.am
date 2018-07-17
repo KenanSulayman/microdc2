@@ -1,4 +1,4 @@
-SUBDIRS = common bzip2 tth
+SUBDIRS = common tth
 
 AM_CFLAGS = \
   -Wall \
@@ -40,7 +40,6 @@ microdc2_SOURCES = \
 
 microdc2_LDADD = \
   common/libcommon.a \
-  bzip2/libbzip2.a \
   tth/libtth.a \
   ../lib/libgnu.a \
   $(READLINE_LIBS) \

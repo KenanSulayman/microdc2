@@ -64,6 +64,7 @@ AC_PATH_PROG(TR, tr)
 #    AC_MSG_WARN([XML libxml2 library version 2.6.16 or later is required to support XML filelists])
 #  fi
 #fi
+AC_CHECK_LIB(bz2, BZ2_bzRead,, AC_MSG_ERROR([Missing bz2 library]))
 
 # Checks for header files
 
@@ -80,7 +81,6 @@ AC_CONFIG_FILES([Makefile
 		 lib/Makefile
 		 src/Makefile
 		 src/common/Makefile
-		 src/bzip2/Makefile
 		 src/tth/Makefile
 		 rpm/microdc.spec])
 AC_CONFIG_FILES([slackware/microdc.SlackBuild],
