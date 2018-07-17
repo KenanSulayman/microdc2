@@ -992,7 +992,7 @@ bool local_file_list_init(void)
             screen_putf(_("%s\n"), msg);
             free(msg);
         } else {
-            warn(_("unknown messge\n"));
+            warn(_("unknown message\n"));
         }
         return false;
     }

@@ -252,7 +252,7 @@ static DCVariable variables[] = {
       var_get_string, var_set_log_file, &log_filename,
       local_path_completion_generator,
       NULL,
-      "File to log screen messages to (will be appeneded)"
+      "File to log screen messages to (will be appended)"
     },
     {
       "nick",
