@@ -66,6 +66,7 @@ MsgQ *update_result_mq = NULL;
 pid_t update_child;
 int   incoming_update_type = -1;
 char* update_status = NULL;
+time_t filelist_mtime = 0;
 
 static const char* filelist_name = "filelist";
 static const char* new_filelist_name = "new-filelist";
@@ -77,6 +78,8 @@ static const uint32_t    filelist_max_supported_version   = 1;
 
 #define ENOTFILELIST    (1 << 16)
 #define EWRONGVERSION   (ENOTFILELIST + 1)
+
+bool report_error(MsgQ* status_mq, const char* fmt, ...);
 
 int compare_pointers(void* p1, void* p2)
 {
@@ -119,19 +122,60 @@ bool is_already_shared(DCFileList* root, const char* dir)
     return is_already_shared_inode(root, st.st_dev, st.st_ino);
 }
 
-DCFileList* read_local_file_list(const char* path)
+void lock_file (const char* path)
+{
+    int fd, timeout = 20;
+    char fn [300];
+    snprintf (fn, sizeof (fn), "%s.lock", path);
+    while ((fd = open (fn, O_RDONLY | O_CREAT | O_EXCL, 0600) < 0)) {
+        if (errno != EEXIST) {
+            /* It seems there's no way to report an error from here to parent? */
+            /*report_error(result_mq, _("%s: Failed to create filelist lock, filelist will be not multiprocess-safe\n"), fn);*/
+            break;
+        }
+        /* Wait some time for the lock to be released */
+        sleep (1);
+        if (!--timeout) {
+            /*report_error(result_mq, _("%s: Filelist semaphore locked, but owner seems dead, breaking lock\n"), fn);*/
+            break;
+        }
+    }
+    if (fd >= 0)
+        close (fd);
+}
+
+void unlock_file (const char* path)
+{
+    char fn [300];
+    snprintf (fn, sizeof (fn), "%s.lock", path);
+    unlink (fn);
+}
+
+/* if old_root is not NULL, rereads the file list only if file changed */
+DCFileList* read_local_file_list(const char* path, DCFileList *old_root)
 {
     struct stat st;
     DCFileList *root = NULL;
 
+    /* First of all, check if filelist is not locked by other process */
+    lock_file (path);
+
     if (stat(path, &st) < 0) {
         if (errno != ENOENT) {
             TRACE(("cannot stat %s: %d, %s\n", path, errno, errstr));
+            unlock_file (path);
             return NULL;
         }
     } else if (!S_ISREG(st.st_mode) && !S_ISLNK(st.st_mode)) {
+        unlock_file (path);
         return NULL;
     }
+
+    if (old_root && filelist_mtime == st.st_mtime) {
+        unlock_file (path);
+        return old_root;
+    }
+    filelist_mtime = st.st_mtime;
 
     int fd = open(path, O_RDONLY);
     if (fd >= 0) {
@@ -158,12 +202,22 @@ DCFileList* read_local_file_list(const char* path)
         root = new_file_node("", DC_TYPE_DIR, NULL);
     }
 
+    unlock_file (path);
+
+    if (old_root)
+        filelist_free (old_root);
+
     return root;
 }
 
 bool write_local_file_list(const char* path, DCFileList* root)
 {
     bool result = false;
+    struct stat st;
+
+    /* Check if filelist is not locked by other process */
+    lock_file (path);
+
     int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (fd >= 0) {
         unsigned char* data = NULL;
@@ -194,8 +248,14 @@ bool write_local_file_list(const char* path, DCFileList* root)
         result = (size == data_size);
 
 cleanup:
+        /* Update filelist mtime */
+        if (stat(path, &st) == 0)
+            filelist_mtime = st.st_mtime;
+
         close(fd);
     }
+
+    unlock_file (path);
     return result;
 }
 
@@ -487,6 +547,7 @@ local_filelist_update_main(int request_fd[2], int result_fd[2])
     /* Inability to register these signals is not a fatal error. */
     sigact.sa_flags = SA_RESTART;
     sigact.sa_handler = SIG_IGN;
+    sigemptyset (&sigact.sa_mask);
 #ifdef HAVE_STRUCT_SIGACTION_SA_RESTORER
     sigact.sa_restorer = NULL;
 #endif
@@ -503,7 +564,7 @@ local_filelist_update_main(int request_fd[2], int result_fd[2])
         goto cleanup;
     }
 
-    if (NULL == (root = read_local_file_list(flist_filename))) {
+    if (NULL == (root = read_local_file_list(flist_filename, NULL))) {
         if (errno == ENOTFILELIST) {
             report_error(result_mq, "Cannot load FileList - %s: Invalid file format\n", flist_filename);
         } else if (errno == EWRONGVERSION) {
@@ -527,7 +588,7 @@ local_filelist_update_main(int request_fd[2], int result_fd[2])
     max_fd = MAX(hash_result_mq->fd, max_fd);
 
     while (true) {
-        tv.tv_sec   = filelist_refresh_timeout;
+        tv.tv_sec   = FILELIST_SLAVE_MODE ? 60 : filelist_refresh_timeout;
         tv.tv_usec  = 0;
 
         fd_set r_ready = readable, w_ready = writable;
@@ -577,13 +638,19 @@ local_filelist_update_main(int request_fd[2], int result_fd[2])
                         fflush(stderr);
                         */
                     }
+
+                    if (FILELIST_SLAVE_MODE && update_hash) {
+                        /* Unexpected hash update received while in slave filelist mode */
+                        update_hash = false;
+                    }
+
                     time_t now = time(NULL);
                     if (update_hash && ((hashing == NULL && hash_files->cur == 0) || (now - hash_start) > filelist_hash_refresh_timeout)) {
                         hash_start = now;
                         if (write_local_file_list(new_flist_filename, root)) {
                             rename(new_flist_filename, flist_filename);
                         } else {
-                            unlink(new_filelist_name);
+                            unlink(new_flist_filename);
                         }
 
                         if (!send_filelist(result_mq, root)) {
@@ -607,11 +674,7 @@ local_filelist_update_main(int request_fd[2], int result_fd[2])
                         msgq_get(request_mq, MSGQ_INT, &update_type, MSGQ_END);
                     } else {
                         if (update_type == FILELIST_UPDATE_REFRESH_INTERVAL) {
-                            time_t interval = 0;
-                            msgq_get(request_mq, MSGQ_INT, &interval, MSGQ_END);
-                            if (interval != 0) {
-                                filelist_refresh_timeout = interval;
-                            }
+                            msgq_get(request_mq, MSGQ_INT, &filelist_refresh_timeout, MSGQ_END);
                         } else {
                             char *name;
                             int len = 0;
@@ -626,13 +689,15 @@ local_filelist_update_main(int request_fd[2], int result_fd[2])
                             case FILELIST_UPDATE_ADD_DIR_NAME:
                                 if (is_already_shared(root, name)) {
                                     // report error here
-                                    report_error(result_mq, "%s directory is already shared as subfolder of existing shared tree\n", name);
-                                } else {
+                                    report_error(result_mq, _("%s directory is already shared as subfolder of existing shared tree\n"), name);
+                                } else if (FILELIST_SLAVE_MODE)
+                                    report_error(result_mq, _("Cannot add directory %s to share list while in slave filelist mode\n"), name);
+                                else {
                                     char* bname = xstrdup(base_name(name));
 
                                     if (hmap_contains_key(root->dir.children, bname)) {
                                         /* we already have the shared directory with the same name */
-                                        report_error(result_mq, "%s directory cannot be shared as %s because there is already shared directory with the same name\n", name, bname);
+                                        report_error(result_mq, _("%s directory cannot be shared as %s because there is already shared directory with the same name\n"), name, bname);
                                     } else {
                                         DCFileList* node = new_file_node(bname, DC_TYPE_DIR, root);
                                         node->dir.real_path = xstrdup(name);
@@ -642,28 +707,30 @@ local_filelist_update_main(int request_fd[2], int result_fd[2])
                                 }
                                 break;
                             case FILELIST_UPDATE_DEL_DIR_NAME:
-                                //selected = 0;
                                 {
                                     char* bname = xstrdup(base_name(name));
 
                                     DCFileList* node = hmap_get(root->dir.children, bname);
-                                    if (node != NULL && node->type == DC_TYPE_DIR) {
-                                        if (strcmp(node->dir.real_path, name) == 0) {
+                                    if (node != NULL && node->type == DC_TYPE_DIR &&
+                                        strcmp(node->dir.real_path, name) == 0) {
+                                        if (FILELIST_SLAVE_MODE)
+                                            report_error(result_mq, _("Cannot remove directory %s from share list while in slave filelist mode\n"), name);
+                                        else {
                                             node = hmap_remove(root->dir.children, bname);
                                             filelist_free(node);
                                             if (write_local_file_list(new_flist_filename, root)) {
                                                 rename(new_flist_filename, flist_filename);
                                             } else {
-                                                unlink(new_filelist_name);
+                                                unlink(new_flist_filename);
                                             }
 
                                             if (!send_filelist(result_mq, root)) {
                                                 goto cleanup;
                                             }
-                                        } else {
-                                            report_error(result_mq, "%s directory is not shared\n");
                                         }
                                     }
+                                    else
+                                        report_error(result_mq, _("%s directory is not shared\n"), name);
                                     free(bname);
                                 }
                                 break;
@@ -703,18 +770,27 @@ local_filelist_update_main(int request_fd[2], int result_fd[2])
                 }
             }
         }
-        if (selected == 0) {
+
+        if (FILELIST_SLAVE_MODE && selected >= 0) {
+            // Check if filelist has been changed since we last read it
+            DCFileList *new_root = read_local_file_list(flist_filename, root);
+            if (new_root != root) {
+                root = new_root;
+                send_filelist(result_mq, root);
+            }
+        }
+        else if (selected == 0) {
             // just look through shared directories for new or deleted files
             if (hashing == NULL && !initial)
-                report_status(result_mq, "Refreshing FileList");
+                report_status(result_mq, _("Refreshing FileList"));
 
             if (lookup_filelist_changes(root, hash_files)) {
                 if (write_local_file_list(new_flist_filename, root)) {
                     rename(new_flist_filename, flist_filename);
                 } else {
-                    unlink(new_filelist_name);
+                    unlink(new_flist_filename);
                 }
-
+    
                 if (!send_filelist(result_mq, root)) {
                     break;
                 }

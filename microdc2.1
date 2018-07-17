@@ -43,6 +43,12 @@ Show summary of options.
 .TP
 \fB\-\-version\fR
 Output version information and exit.
+.TP
+\fB\-\-filelist_refresh_interval\fR=\fINUMBER\fR
+Local filelist refresh interval (in seconds). If set to zero, program runs in a
+special \fIslave\fR mode: it never updates the file list, just checks every minute
+if the filelist changes, and if so - reads it. This is pretty useful if you connect
+to several hubs and use same filelist.
 .SH FILES
 The following files are used by microdc (~ represents the current user's home directory):
 .TP

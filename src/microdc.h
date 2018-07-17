@@ -596,6 +596,7 @@ extern MsgQ *update_result_mq;
 extern pid_t update_child;
 extern char* update_status;
 extern time_t filelist_refresh_timeout;
+#define FILELIST_SLAVE_MODE (filelist_refresh_timeout <= 0)
 bool local_file_list_update_init(void);
 bool local_file_list_init(void);
 void local_file_list_update_finish(void);
